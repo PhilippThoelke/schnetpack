@@ -52,9 +52,9 @@ class SchNetInteraction(nn.Module):
             normalize_filter=normalize_filter,
         )
         # dense layer
-        self.dense = Dense(n_atom_basis, n_atom_basis, bias=True, activation=None)
+        self.dense = Dense(n_atom_basis * 2, n_atom_basis, bias=True, activation=None)
 
-    def forward(self, x, r_ij, neighbors, neighbor_mask, f_ij=None):
+    def forward(self, x, embed, r_ij, neighbors, neighbor_mask, f_ij=None):
         """Compute interaction output.
 
         Args:
@@ -73,6 +73,7 @@ class SchNetInteraction(nn.Module):
         """
         # continuous-filter convolution interaction block followed by Dense layer
         v = self.cfconv(x, r_ij, neighbors, neighbor_mask, f_ij)
+        v = torch.cat((v, embed), dim=-1)
         v = self.dense(v)
         return v
 
@@ -229,9 +230,10 @@ class SchNet(nn.Module):
         # store intermediate representations
         if self.return_intermediate:
             xs = [x]
+        embed = x
         # compute interaction block to update atomic embeddings
         for interaction in self.interactions:
-            v = interaction(x, r_ij, neighbors, neighbor_mask, f_ij=f_ij)
+            v = interaction(x, embed, r_ij, neighbors, neighbor_mask, f_ij=f_ij)
             x = x + v
             if self.return_intermediate:
                 xs.append(x)
