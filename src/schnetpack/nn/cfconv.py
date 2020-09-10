@@ -42,12 +42,13 @@ class CFConv(nn.Module):
         self.cutoff_network = cutoff_network
         self.agg = Aggregate(axis=axis, mean=normalize_filter)
 
-    def forward(self, x, r_ij, neighbors, pairwise_mask, f_ij=None):
+    def forward(self, x, embed, r_ij, neighbors, pairwise_mask, f_ij=None):
         """Compute convolution block.
 
         Args:
             x (torch.Tensor): input representation/embedding of atomic environments
                 with (N_b, N_a, n_in) shape.
+            embed (torch.Tensor): initial embeddings with (N_b, N_a, n_in) shape.
             r_ij (torch.Tensor): interatomic distances of (N_b, N_a, N_nbh) shape.
             neighbors (torch.Tensor): indices of neighbors of (N_b, N_a, N_nbh) shape.
             pairwise_mask (torch.Tensor): mask to filter out non-existing neighbors
@@ -61,6 +62,14 @@ class CFConv(nn.Module):
         """
         if f_ij is None:
             f_ij = r_ij.unsqueeze(-1)
+
+        # concatenate neighbor embeddings and expanded distances
+        nbh_size = neighbors.size()
+        nbh = neighbors.view(-1, nbh_size[1] * nbh_size[2], 1)
+        nbh = nbh.expand(-1, -1, embed.size(2))
+        embed = torch.gather(embed, 1, nbh)
+        embed = embed.view(nbh_size[0], nbh_size[1], nbh_size[2], -1)
+        f_ij = torch.cat((f_ij, embed), -1)
 
         # pass expanded interactomic distances through filter block
         W = self.filter_network(f_ij)

@@ -36,7 +36,7 @@ class SchNetInteraction(nn.Module):
         super(SchNetInteraction, self).__init__()
         # filter block used in interaction block
         self.filter_network = nn.Sequential(
-            Dense(n_spatial_basis, n_filters, activation=shifted_softplus),
+            Dense(n_spatial_basis + n_atom_basis, n_filters, activation=shifted_softplus),
             Dense(n_filters, n_filters),
         )
         # cutoff layer used in interaction block
@@ -52,7 +52,7 @@ class SchNetInteraction(nn.Module):
             normalize_filter=normalize_filter,
         )
         # dense layer
-        self.dense = Dense(n_atom_basis * 2, n_atom_basis, bias=True, activation=None)
+        self.dense = Dense(n_atom_basis, n_atom_basis, bias=True, activation=None)
 
     def forward(self, x, embed, r_ij, neighbors, neighbor_mask, f_ij=None):
         """Compute interaction output.
@@ -60,6 +60,7 @@ class SchNetInteraction(nn.Module):
         Args:
             x (torch.Tensor): input representation/embedding of atomic environments
                 with (N_b, N_a, n_atom_basis) shape.
+            embed (torch.Tensor): initial embedding with (N_b, N_a, n_atom_basis) shape.
             r_ij (torch.Tensor): interatomic distances of (N_b, N_a, N_nbh) shape.
             neighbors (torch.Tensor): indices of neighbors of (N_b, N_a, N_nbh) shape.
             neighbor_mask (torch.Tensor): mask to filter out non-existing neighbors
@@ -72,8 +73,7 @@ class SchNetInteraction(nn.Module):
 
         """
         # continuous-filter convolution interaction block followed by Dense layer
-        v = self.cfconv(x, r_ij, neighbors, neighbor_mask, f_ij)
-        v = torch.cat((v, embed), dim=-1)
+        v = self.cfconv(x, embed, r_ij, neighbors, neighbor_mask, f_ij)
         v = self.dense(v)
         return v
 
