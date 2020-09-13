@@ -42,13 +42,15 @@ class CFConv(nn.Module):
         self.cutoff_network = cutoff_network
         self.agg = Aggregate(axis=axis, mean=normalize_filter)
 
-    def forward(self, x, r_ij, neighbors, pairwise_mask, f_ij=None):
+    def forward(self, x, r_ij, a_ij, neighbors, pairwise_mask, f_ij=None):
         """Compute convolution block.
 
         Args:
             x (torch.Tensor): input representation/embedding of atomic environments
                 with (N_b, N_a, n_in) shape.
             r_ij (torch.Tensor): interatomic distances of (N_b, N_a, N_nbh) shape.
+            a_ij (torch.Tensor): angle between bead orientation (CB-CA) and neighbor
+                position.
             neighbors (torch.Tensor): indices of neighbors of (N_b, N_a, N_nbh) shape.
             pairwise_mask (torch.Tensor): mask to filter out non-existing neighbors
                 introduced via padding.
@@ -61,6 +63,9 @@ class CFConv(nn.Module):
         """
         if f_ij is None:
             f_ij = r_ij.unsqueeze(-1)
+        
+        # concat expanded distances and rotations
+        f_ij = torch.cat((f_ij, a_ij), dim=-1)
 
         # pass expanded interactomic distances through filter block
         W = self.filter_network(f_ij)

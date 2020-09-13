@@ -9,6 +9,8 @@ from schnetpack.nn.acsf import GaussianSmearing
 from schnetpack.nn.neighbors import AtomDistances
 from schnetpack.nn.activations import shifted_softplus
 
+import math
+
 
 class SchNetInteraction(nn.Module):
     r"""SchNet interaction block for modeling interactions of atomistic systems.
@@ -36,7 +38,7 @@ class SchNetInteraction(nn.Module):
         super(SchNetInteraction, self).__init__()
         # filter block used in interaction block
         self.filter_network = nn.Sequential(
-            Dense(n_spatial_basis, n_filters, activation=shifted_softplus),
+            Dense(n_spatial_basis * 2, n_filters, activation=shifted_softplus),
             Dense(n_filters, n_filters),
         )
         # cutoff layer used in interaction block
@@ -54,13 +56,15 @@ class SchNetInteraction(nn.Module):
         # dense layer
         self.dense = Dense(n_atom_basis, n_atom_basis, bias=True, activation=None)
 
-    def forward(self, x, r_ij, neighbors, neighbor_mask, f_ij=None):
+    def forward(self, x, r_ij, a_ij, neighbors, neighbor_mask, f_ij=None):
         """Compute interaction output.
 
         Args:
             x (torch.Tensor): input representation/embedding of atomic environments
                 with (N_b, N_a, n_atom_basis) shape.
             r_ij (torch.Tensor): interatomic distances of (N_b, N_a, N_nbh) shape.
+            a_ij (torch.Tensor): angle between bead orientation (CB-CA) and neighbor
+                position.
             neighbors (torch.Tensor): indices of neighbors of (N_b, N_a, N_nbh) shape.
             neighbor_mask (torch.Tensor): mask to filter out non-existing neighbors
                 introduced via padding.
@@ -72,7 +76,7 @@ class SchNetInteraction(nn.Module):
 
         """
         # continuous-filter convolution interaction block followed by Dense layer
-        v = self.cfconv(x, r_ij, neighbors, neighbor_mask, f_ij)
+        v = self.cfconv(x, r_ij, a_ij, neighbors, neighbor_mask, f_ij)
         v = self.dense(v)
         return v
 
@@ -141,7 +145,7 @@ class SchNet(nn.Module):
         self.embedding = nn.Embedding(max_z, n_atom_basis, padding_idx=0)
 
         # layer for computing interatomic distances
-        self.distances = AtomDistances()
+        self.distances = AtomDistances(return_directions=True)
 
         # layer for expanding interatomic distances in a basis
         if distance_expansion is None:
@@ -150,6 +154,10 @@ class SchNet(nn.Module):
             )
         else:
             self.distance_expansion = distance_expansion
+
+        self.angle_expansion = GaussianSmearing(
+            0.0, math.pi, n_gaussians, trainable=trainable_gaussians
+        )
 
         # block for computing interaction
         if coupled_interactions:
@@ -205,6 +213,7 @@ class SchNet(nn.Module):
         # get tensors from input dictionary
         atomic_numbers = inputs[Properties.Z]
         positions = inputs[Properties.R]
+        positions_cb = inputs[Properties.R_CB]
         cell = inputs[Properties.cell]
         cell_offset = inputs[Properties.cell_offset]
         neighbors = inputs[Properties.neighbors]
@@ -221,17 +230,25 @@ class SchNet(nn.Module):
             x = x + charge
 
         # compute interatomic distance of every atom to its neighbors
-        r_ij = self.distances(
+        r_ij, neighbor_directions = self.distances(
             positions, neighbors, cell, cell_offset, neighbor_mask=neighbor_mask
         )
         # expand interatomic distances (for example, Gaussian smearing)
         f_ij = self.distance_expansion(r_ij)
+        # get normalized orientation from CA and CB positions and expand to neighbor dimensions
+        orientation = positions_cb - positions
+        orientation = orientation[:,:,None].expand_as(neighbor_directions)
+        orientation = orientation / orientation.norm(dim=-1, keepdim=True)
+        # compute angle between CA-CB orientation and neighbors
+        a_ij = (orientation * neighbor_directions).sum(dim=-1).acos()
+        a_ij = self.angle_expansion(a_ij)
+
         # store intermediate representations
         if self.return_intermediate:
             xs = [x]
         # compute interaction block to update atomic embeddings
         for interaction in self.interactions:
-            v = interaction(x, r_ij, neighbors, neighbor_mask, f_ij=f_ij)
+            v = interaction(x, r_ij, a_ij, neighbors, neighbor_mask, f_ij=f_ij)
             x = x + v
             if self.return_intermediate:
                 xs.append(x)
