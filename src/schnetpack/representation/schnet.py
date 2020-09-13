@@ -230,10 +230,9 @@ class SchNet(nn.Module):
         # store intermediate representations
         if self.return_intermediate:
             xs = [x]
-        embed = x
         # compute interaction block to update atomic embeddings
         for interaction in self.interactions:
-            v = interaction(x, embed, r_ij, neighbors, neighbor_mask, f_ij=f_ij)
+            v = interaction(x, self.embedding(atomic_numbers), r_ij, neighbors, neighbor_mask, f_ij=f_ij)
             x = x + v
             if self.return_intermediate:
                 xs.append(x)
