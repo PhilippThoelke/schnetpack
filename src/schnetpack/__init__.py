@@ -9,6 +9,7 @@ class Properties:
     atom_mask = "_atom_mask"
     position = "_positions"
     R = position
+    R_CB = position + "_cb"
     cell = "_cell"
     pbc = "_pbc"
     neighbors = "_neighbors"
