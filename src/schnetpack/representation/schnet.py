@@ -199,7 +199,7 @@ class SchNet(nn.Module):
             self.charge = nn.Parameter(torch.Tensor(1, n_atom_basis))
             self.charge.data.normal_(0, 1.0 / n_atom_basis ** 0.5)
 
-        self.angle_epsilon = angle_epsilon if angle_epsilon else 1e-8
+        self.angle_epsilon = angle_epsilon if angle_epsilon else 1e-6
 
     def forward(self, inputs):
         """Compute atomic representations/embeddings.
