@@ -240,7 +240,8 @@ class SchNet(nn.Module):
         orientation = orientation[:,:,None].expand_as(neighbor_directions)
         orientation = orientation / orientation.norm(dim=-1, keepdim=True)
         # compute angle between CA-CB orientation and neighbors
-        a_ij = (orientation * neighbor_directions).sum(dim=-1).acos()
+        dot = (orientation * neighbor_directions).sum(dim=-1)
+        a_ij = torch.clamp(dot, -1, 1).acos()
         a_ij = self.angle_expansion(a_ij)
 
         # store intermediate representations
