@@ -136,6 +136,7 @@ class SchNet(nn.Module):
         trainable_gaussians=False,
         distance_expansion=None,
         charged_systems=False,
+        angle_epsilon=None
     ):
         super(SchNet, self).__init__()
 
@@ -198,6 +199,8 @@ class SchNet(nn.Module):
             self.charge = nn.Parameter(torch.Tensor(1, n_atom_basis))
             self.charge.data.normal_(0, 1.0 / n_atom_basis ** 0.5)
 
+        self.angle_epsilon = angle_epsilon if angle_epsilon else 1e-8
+
     def forward(self, inputs):
         """Compute atomic representations/embeddings.
 
@@ -241,14 +244,8 @@ class SchNet(nn.Module):
         orientation = orientation / orientation.norm(dim=-1, keepdim=True)
         # compute angle between CA-CB orientation and neighbors
         dot = (orientation * neighbor_directions).sum(dim=-1)
-        a_ij = torch.clamp(dot, -1, 1).acos()
+        a_ij = torch.clamp(dot, -1 + self.angle_epsilon, 1 - self.angle_epsilon).acos()
         a_ij = self.angle_expansion(a_ij)
-
-        a_ij = torch.zeros_like(a_ij)
-
-        # TODO: remove this check (just for debugging)
-        if torch.isnan(a_ij).any():
-            raise ValueError('Some angle is NaN for some reason')
 
         # store intermediate representations
         if self.return_intermediate:
