@@ -244,6 +244,8 @@ class SchNet(nn.Module):
         a_ij = torch.clamp(dot, -1, 1).acos()
         a_ij = self.angle_expansion(a_ij)
 
+        a_ij = torch.zeros_like(a_ij)
+
         # TODO: remove this check (just for debugging)
         if torch.isnan(a_ij).any():
             raise ValueError('Some angle is NaN for some reason')
