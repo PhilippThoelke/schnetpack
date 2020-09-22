@@ -245,7 +245,8 @@ class SchNet(nn.Module):
         a_ij = self.angle_expansion(a_ij)
 
         # TODO: remove this check (just for debugging)
-        assert not torch.isnan(a_ij).any(), 'Some angle is NaN for some reason'
+        if torch.isnan(a_ij).any():
+            raise ValueError('Some angle is NaN for some reason')
 
         # store intermediate representations
         if self.return_intermediate:
