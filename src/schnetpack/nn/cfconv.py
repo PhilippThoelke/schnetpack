@@ -65,10 +65,10 @@ class CFConv(nn.Module):
             f_ij = r_ij.unsqueeze(-1)
         
         # concat expanded distances and rotations
-        f_ij = torch.cat((f_ij, a_ij), dim=-1)
+        msg_ij = torch.cat((f_ij, a_ij), dim=-1)
 
         # pass expanded interactomic distances through filter block
-        W = self.filter_network(f_ij)
+        W = self.filter_network(msg_ij)
         # apply cutoff
         if self.cutoff_network is not None:
             C = self.cutoff_network(r_ij)
