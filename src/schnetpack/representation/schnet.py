@@ -153,33 +153,20 @@ class SchNet(nn.Module):
 
         # block for computing interaction
         if coupled_interactions:
-            # use the same SchNetInteraction instance (hence the same weights)
-            self.interactions = nn.ModuleList(
-                [
-                    SchNetInteraction(
-                        n_atom_basis=n_atom_basis,
-                        n_spatial_basis=n_gaussians,
-                        n_filters=n_filters,
-                        cutoff_network=cutoff_network,
-                        cutoff=cutoff,
-                        normalize_filter=normalize_filter,
-                    )
-                ]
-                * n_interactions
-            )
+            raise ValueError('Coupled interactions not possible with wide embeddings.')
         else:
             # use one SchNetInteraction instance for each interaction
             self.interactions = nn.ModuleList(
                 [
                     SchNetInteraction(
-                        n_atom_basis=n_atom_basis,
+                        n_atom_basis=n_atom_basis * (2 ** i),
                         n_spatial_basis=n_gaussians,
                         n_filters=n_filters,
                         cutoff_network=cutoff_network,
                         cutoff=cutoff,
                         normalize_filter=normalize_filter,
                     )
-                    for _ in range(n_interactions)
+                    for i in range(n_interactions)
                 ]
             )
 
@@ -232,7 +219,7 @@ class SchNet(nn.Module):
         # compute interaction block to update atomic embeddings
         for interaction in self.interactions:
             v = interaction(x, r_ij, neighbors, neighbor_mask, f_ij=f_ij)
-            x = x + v
+            x = torch.cat((x, v), dim=-1)
             if self.return_intermediate:
                 xs.append(x)
 
