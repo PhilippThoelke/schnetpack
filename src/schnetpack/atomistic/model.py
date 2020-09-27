@@ -38,6 +38,7 @@ class AtomisticModel(nn.Module):
         """
         if self.requires_dr:
             inputs[Properties.R].requires_grad_()
+            inputs[Properties.R_CB].requires_grad_()
         inputs["representation"] = self.representation(inputs)
         outs = {}
         for output_model in self.output_modules:

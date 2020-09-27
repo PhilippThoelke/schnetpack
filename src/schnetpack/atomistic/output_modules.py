@@ -39,6 +39,9 @@ class Atomwise(nn.Module):
             No contributions returned if None. (default: None)
         derivative (str or None): Name of property derivative. No derivative
             returned if None. (default: None)
+        second_derivative (str or None): Name of second property derivative for CB
+            forces. Only enabled if derivative is not None. No second derivative
+            returned if None. (default: None)
         negative_dr (bool): Multiply the derivative with -1 if True. (default: False)
         create_graph (bool): If False, the graph used to compute the grad will be
             freed. Note that in nearly all cases setting this option to True is not nee
@@ -74,6 +77,7 @@ class Atomwise(nn.Module):
         property="y",
         contributions=None,
         derivative=None,
+        second_derivative=None,
         negative_dr=False,
         create_graph=True,
         mean=None,
@@ -88,6 +92,7 @@ class Atomwise(nn.Module):
         self.property = property
         self.contributions = contributions
         self.derivative = derivative
+        self.second_derivative = second_derivative
         self.negative_dr = negative_dr
 
         mean = torch.FloatTensor([0.0]) if mean is None else mean
@@ -148,14 +153,17 @@ class Atomwise(nn.Module):
 
         if self.derivative:
             sign = -1.0 if self.negative_dr else 1.0
-            dy = grad(
+            grad_inputs = [inputs[Properties.R], inputs[Properties.R_CB]] if self.second_derivative else inputs[Properties.R]
+            grads = grad(
                 result[self.property],
-                inputs[Properties.R],
+                grad_inputs,
                 grad_outputs=torch.ones_like(result[self.property]),
                 create_graph=self.create_graph,
                 retain_graph=True,
-            )[0]
-            result[self.derivative] = sign * dy
+            )
+            result[self.derivative] = sign * grads[0]
+            if self.second_derivative:
+                result[self.second_derivative] = sign * grads[1]
         return result
 
 
