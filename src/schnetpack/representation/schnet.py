@@ -219,7 +219,7 @@ class SchNet(nn.Module):
         # compute interaction block to update atomic embeddings
         for interaction in self.interactions:
             v = interaction(x, r_ij, neighbors, neighbor_mask, f_ij=f_ij)
-            x = torch.cat((x, v), dim=-1)
+            x = torch.cat((x, x + v), dim=-1)
             if self.return_intermediate:
                 xs.append(x)
 
