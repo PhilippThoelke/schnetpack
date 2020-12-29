@@ -205,11 +205,13 @@ class SchNet(nn.Module):
         # get tensors from input dictionary
         atomic_numbers = inputs[Properties.Z]
         positions = inputs[Properties.R]
-        cell = inputs[Properties.cell]
-        cell_offset = inputs[Properties.cell_offset]
-        neighbors = inputs[Properties.neighbors]
-        neighbor_mask = inputs[Properties.neighbor_mask]
+        # cell = inputs[Properties.cell]
+        # cell_offset = inputs[Properties.cell_offset]
+        # neighbors = inputs[Properties.neighbors]
+        # neighbor_mask = inputs[Properties.neighbor_mask]
         atom_mask = inputs[Properties.atom_mask]
+
+        batch_size, seq_len, _ = positions.size()
 
         # get atom embeddings for the input atomic numbers
         x = self.embedding(atomic_numbers)
@@ -221,8 +223,10 @@ class SchNet(nn.Module):
             x = x + charge
 
         # compute interatomic distance of every atom to its neighbors
+        neighbors = torch.arange(seq_len, device=positions.device).repeat(seq_len).reshape(seq_len, seq_len).expand(batch_size, -1, -1)
+        neighbor_mask = 1 - torch.eye(seq_len, device=positions.device).expand(batch_size, -1, -1)
         r_ij = self.distances(
-            positions, neighbors, cell, cell_offset, neighbor_mask=neighbor_mask
+            positions, neighbors, neighbor_mask=neighbor_mask
         )
         # expand interatomic distances (for example, Gaussian smearing)
         f_ij = self.distance_expansion(r_ij)
