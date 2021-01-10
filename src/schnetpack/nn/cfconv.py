@@ -42,6 +42,9 @@ class CFConv(nn.Module):
         self.cutoff_network = cutoff_network
         self.agg = Aggregate(axis=axis, mean=normalize_filter)
 
+        self.q_proj = nn.Linear(n_filters, n_filters)
+        self.k_proj = nn.Linear(n_filters, n_filters)
+
     def forward(self, x, r_ij, neighbors, pairwise_mask, f_ij=None):
         """Compute convolution block.
 
@@ -71,6 +74,17 @@ class CFConv(nn.Module):
 
         # pass initial embeddings through Dense layer
         y = self.in2f(x)
+
+        # compute queries and keys
+        q = self.q_proj(y)
+        k = self.k_proj(y)
+
+        # compute attention weights
+        seq_len = q.size(1)
+        attn = torch.matmul(q, k.transpose(-1, -2))
+        attn = attn[:,~torch.eye(seq_len, dtype=torch.bool)].reshape(-1, seq_len, seq_len - 1)
+        attn = torch.softmax(attn, dim=-1)
+
         # reshape y for element-wise multiplication by W
         nbh_size = neighbors.size()
         nbh = neighbors.view(-1, nbh_size[1] * nbh_size[2], 1)
@@ -80,6 +94,7 @@ class CFConv(nn.Module):
 
         # element-wise multiplication, aggregating and Dense layer
         y = y * W
+        y = y * attn.unsqueeze(-1)
         y = self.agg(y, pairwise_mask)
         y = self.f2out(y)
         return y
