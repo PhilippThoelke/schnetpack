@@ -51,6 +51,9 @@ class SchNetInteraction(nn.Module):
             activation=shifted_softplus,
             normalize_filter=normalize_filter,
         )
+
+        self.attn = nn.MultiheadAttention(n_filters, 8)
+
         # dense layer
         self.dense = Dense(n_atom_basis, n_atom_basis, bias=True, activation=None)
 
@@ -73,6 +76,10 @@ class SchNetInteraction(nn.Module):
         """
         # continuous-filter convolution interaction block followed by Dense layer
         v = self.cfconv(x, r_ij, neighbors, neighbor_mask, f_ij)
+        v = v.transpose(0, 1)
+        neighbor_mask = torch.cat((neighbor_mask[:,:,0].unsqueeze(-1), neighbor_mask), dim=-1)
+        neighbor_mask = neighbor_mask.unsqueeze(1).expand(-1, 8, -1, -1).reshape(-1, neighbor_mask.size(1), neighbor_mask.size(2))
+        v = self.attn(v, v, v, attn_mask=neighbor_mask)[0].transpose(0, 1)
         v = self.dense(v)
         return v
 
