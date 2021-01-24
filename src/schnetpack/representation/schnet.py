@@ -227,14 +227,13 @@ class SchNet(nn.Module):
         # expand interatomic distances (for example, Gaussian smearing)
         f_ij = self.distance_expansion(r_ij)
         # store intermediate representations
-        if self.return_intermediate:
-            xs = [x]
+        xs = [x]
         # compute interaction block to update atomic embeddings
         for interaction in self.interactions:
             v = interaction(x, r_ij, neighbors, neighbor_mask, f_ij=f_ij)
             x = x + v
-            if self.return_intermediate:
-                xs.append(x)
+            xs.append(x)
+        x = torch.stack(xs).sum(dim=0)
 
         if self.return_intermediate:
             return x, xs
