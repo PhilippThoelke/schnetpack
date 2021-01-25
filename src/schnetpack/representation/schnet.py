@@ -139,6 +139,7 @@ class SchNet(nn.Module):
         # make a lookup table to store embeddings for each element (up to atomic
         # number max_z) each of which is a vector of size n_atom_basis
         self.embedding = nn.Embedding(max_z, n_atom_basis, padding_idx=0)
+        self.neighbor_embedding = nn.Embedding(max_z, n_atom_basis, padding_idx=0)
 
         # layer for computing interatomic distances
         self.distances = AtomDistances()
@@ -190,6 +191,12 @@ class SchNet(nn.Module):
             self.charge = nn.Parameter(torch.Tensor(1, n_atom_basis))
             self.charge.data.normal_(0, 1.0 / n_atom_basis ** 0.5)
 
+        # create cutoff function for neighbor weighting
+        self.cutoff = cutoff_network(cutoff)
+
+        self.distance_projection = nn.Linear(n_gaussians, n_atom_basis)
+        self.combine_embeddings = nn.Linear(n_atom_basis * 2, n_atom_basis)
+
     def forward(self, inputs):
         """Compute atomic representations/embeddings.
 
@@ -214,6 +221,10 @@ class SchNet(nn.Module):
         # get atom embeddings for the input atomic numbers
         x = self.embedding(atomic_numbers)
 
+        # embed neighbouring atoms
+        neighbor_atomic_numbers = atomic_numbers.unsqueeze(-1).expand(-1, -1, x.size(1) - 1).gather(1, neighbors) * neighbor_mask.int()
+        neighbor_embeddings = self.neighbor_embedding(neighbor_atomic_numbers)
+
         if False and self.charged_systems and Properties.charge in inputs.keys():
             n_atoms = torch.sum(atom_mask, dim=1, keepdim=True)
             charge = inputs[Properties.charge] / n_atoms  # B
@@ -224,8 +235,15 @@ class SchNet(nn.Module):
         r_ij = self.distances(
             positions, neighbors, cell, cell_offset, neighbor_mask=neighbor_mask
         )
+
         # expand interatomic distances (for example, Gaussian smearing)
         f_ij = self.distance_expansion(r_ij)
+
+        # combine distance embeddings with atom embeddings
+        kernel = self.distance_projection(f_ij) * self.cutoff(r_ij).unsqueeze(-1)
+        combined = torch.cat([x, (neighbor_embeddings * kernel).sum(dim=-2)], dim=-1)
+        x = self.combine_embeddings(combined)
+
         # store intermediate representations
         if self.return_intermediate:
             xs = [x]
